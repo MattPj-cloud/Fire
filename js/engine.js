@@ -23,7 +23,6 @@ const FireEngine = (() => {
 
   /**
    * Project a single pot forward year by year, with contribution changes at life events.
-   * contribSchedule: sorted array of { fromYear, monthlyContrib }
    */
   function projectPot(balance, baseMonthlyContrib, annualReturn, years, inflation, events) {
     const data = [];
@@ -35,7 +34,6 @@ const FireEngine = (() => {
       const realValue = nominal / Math.pow(1 + inf, y);
       data.push({ year: y, nominal, real: realValue });
       if (y < years) {
-        // Find the active contribution for this year
         let contrib = baseMonthlyContrib;
         for (const ev of events) {
           if (y >= ev.fromYear) contrib = ev.monthlyContrib;
@@ -46,17 +44,21 @@ const FireEngine = (() => {
     return data;
   }
 
+
   /**
    * Full FIRE projection combining all pots.
+   * FIRE number is now CALCULATED from annual withdrawal using 4% SWR.
    */
   function runProjection(inputs) {
     const years = inputs.targetAge - inputs.currentAge;
     if (years <= 0) return null;
 
-    // Pension: personal + employer contributions (pre-tax, no relief needed)
+    // FIRE number = annual withdrawal / 4% safe withdrawal rate
+    const fireNumber = inputs.annualWithdrawal / 0.04;
+
     const totalPensionMonthly = inputs.pensionContrib + inputs.employerContrib;
 
-    // Build life event schedules per pot (sorted by fromYear)
+    // Build life event schedules per pot
     const lifeEvents = inputs.lifeEvents || [];
     const sorted = lifeEvents.slice().sort((a, b) => a.atAge - b.atAge);
 
@@ -91,9 +93,6 @@ const FireEngine = (() => {
       });
     }
 
-    // FIRE number is user-set
-    const fireNumber = inputs.fireTarget;
-
     const inf = inputs.inflation / 100;
 
     // Find FIRE year (when total real value hits the target)
@@ -121,17 +120,14 @@ const FireEngine = (() => {
       }
     }
 
-    // State pension: if enabled, reduces the effective target after state pension age
+    // State pension adjustment
     let statePensionAnnual = 0;
     if (inputs.statePensionEnabled) {
       statePensionAnnual = inputs.statePensionAmount;
     }
 
-    // Adjusted FIRE number with state pension
-    // State pension covers some annual draw, so you need a smaller pot
     let adjustedFireNumber = fireNumber;
     if (statePensionAnnual > 0) {
-      // Reduce target by capitalised value of state pension (at 4% SWR equivalent)
       const statePensionCapital = statePensionAnnual / 0.04;
       adjustedFireNumber = Math.max(0, fireNumber - statePensionCapital);
     }
@@ -150,6 +146,12 @@ const FireEngine = (() => {
       }
     }
 
+    // Drawdown
+    const drawdown = runDrawdown(inputs, combined);
+
+    // What-if scenarios
+    const whatIf = calculateWhatIfs(inputs, combined, fireNumber);
+
     return {
       years,
       combined,
@@ -166,16 +168,60 @@ const FireEngine = (() => {
       currentAge: inputs.currentAge,
       targetAge: inputs.targetAge,
       inflation: inputs.inflation,
-      drawdown: runDrawdown(inputs, combined),
+      drawdown,
+      whatIf,
       lifeEvents: sorted.map(e => ({ name: e.name || 'Event', atAge: e.atAge })),
     };
   }
 
+
+  /**
+   * What-if sensitivity calculations.
+   * Shows impact of reducing withdrawal by £5k and £10k.
+   */
+  function calculateWhatIfs(inputs, combined, fireNumber) {
+    const results = [];
+    const deltas = [5000, 10000];
+
+    for (const delta of deltas) {
+      const reducedWithdrawal = inputs.annualWithdrawal - delta;
+      if (reducedWithdrawal <= 0) continue;
+
+      const reducedFireNumber = reducedWithdrawal / 0.04;
+      const effectiveTarget = inputs.statePensionEnabled
+        ? Math.max(0, reducedFireNumber - (inputs.statePensionAmount / 0.04))
+        : reducedFireNumber;
+
+      // Find when they'd hit this lower target
+      let newFireYear = null;
+      for (let y = 0; y <= combined.length - 1; y++) {
+        const age = inputs.currentAge + y;
+        const target = (inputs.statePensionEnabled && age >= inputs.statePensionAge)
+          ? effectiveTarget : reducedFireNumber;
+        if (combined[y].totalReal >= target) {
+          newFireYear = y;
+          break;
+        }
+      }
+
+      // Also run a quick drawdown to see when money runs out
+      const ddInputs = Object.assign({}, inputs, { annualWithdrawal: reducedWithdrawal });
+      const dd = runDrawdown(ddInputs, combined);
+
+      results.push({
+        delta,
+        reducedWithdrawal,
+        fireYear: newFireYear,
+        fireAge: newFireYear !== null ? inputs.currentAge + newFireYear : null,
+        runsOutAge: dd.runsOutAge,
+      });
+    }
+
+    return results;
+  }
+
   /**
    * Simulate retirement drawdown from the combined pot.
-   * Withdrawals increase with inflation each year.
-   * Pot continues to earn returns.
-   * State pension reduces the amount drawn from the pot.
    */
   function runDrawdown(inputs, combined) {
     const retireAge = inputs.targetAge;
@@ -197,24 +243,19 @@ const FireEngine = (() => {
       data.push({ year: y, age, nominal: pot, real: realPot, withdrawal });
 
       if (y < maxYears) {
-        // State pension offsets withdrawal after state pension age
         let effectiveWithdrawal = withdrawal;
         if (inputs.statePensionEnabled && age >= inputs.statePensionAge) {
-          // State pension also inflates from retirement start
           const inflatedStatePension = inputs.statePensionAmount * Math.pow(1 + inf, age - retireAge);
           effectiveWithdrawal = Math.max(0, withdrawal - inflatedStatePension);
         }
 
-        // Withdraw then grow
         pot = (pot - effectiveWithdrawal) * (1 + ret);
 
         if (pot <= 0) {
           pot = 0;
           if (runsOutAge === null) runsOutAge = age + 1;
-          // Keep going to fill chart data with zeros
         }
 
-        // Inflate next year's withdrawal
         withdrawal *= (1 + inf);
       }
     }
