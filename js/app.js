@@ -8,19 +8,36 @@
     FireUI.updateResults(result);
   }
 
-  // Expose for dynamically added event inputs
-  window._fireRecalc = recalculate;
-
-  // Debounce for smooth slider/input interaction
+  // Debounced version for slider/input events
   let timer = null;
   function debouncedRecalc() {
     clearTimeout(timer);
-    timer = setTimeout(recalculate, 80);
+    timer = setTimeout(recalculate, 60);
   }
 
-  // Bind all inputs
-  document.querySelectorAll('input[type="number"], select').forEach(el => {
-    el.addEventListener('input', debouncedRecalc);
+  window._fireRecalc = debouncedRecalc;
+
+  // Bind static slider pairs (age, withdrawal, inflation, etc.)
+  FireUI.bindAllSliders();
+
+  // Create default pots (one of each)
+  FireUI.addPot('pension');
+  FireUI.addPot('isa');
+  FireUI.addPot('other');
+
+  // Wire "Add" buttons for each pot category
+  document.querySelectorAll('.btn-add-pot').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      // New pots start with zero balances
+      const zeros = { balance: 0, contrib: 0, employer: 0, 'return': 5 };
+      const names = { pension: 'Pension ' + (document.querySelectorAll('.pot[data-pot-type="pension"]').length + 1),
+                      isa: 'ISA ' + (document.querySelectorAll('.pot[data-pot-type="isa"]').length + 1),
+                      other: 'Other ' + (document.querySelectorAll('.pot[data-pot-type="other"]').length + 1) };
+      zeros.name = names[type] || 'New Pot';
+      FireUI.addPot(type, zeros);
+      recalculate();
+    });
   });
 
   // State pension toggle
@@ -44,7 +61,7 @@
     this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
   });
 
-  // Resize chart on window resize
+  // Resize
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
