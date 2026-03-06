@@ -33,7 +33,8 @@
       const zeros = { balance: 0, contrib: 0, employer: 0, 'return': 5 };
       const names = { pension: 'Pension ' + (document.querySelectorAll('.pot[data-pot-type="pension"]').length + 1),
                       isa: 'ISA ' + (document.querySelectorAll('.pot[data-pot-type="isa"]').length + 1),
-                      other: 'Other ' + (document.querySelectorAll('.pot[data-pot-type="other"]').length + 1) };
+                      other: 'Other ' + (document.querySelectorAll('.pot[data-pot-type="other"]').length + 1),
+                      db: 'DB Pension ' + (document.querySelectorAll('.pot[data-pot-type="db"]').length + 1) };
       zeros.name = names[type] || 'New Pot';
       FireUI.addPot(type, zeros);
       recalculate();
@@ -44,6 +45,13 @@
   const spToggle = document.getElementById('statePensionEnabled');
   spToggle.addEventListener('change', () => {
     FireUI.toggleStatePensionFields(spToggle.checked);
+    recalculate();
+  });
+
+  // Inflation toggle
+  const infToggle = document.getElementById('inflationEnabled');
+  infToggle.addEventListener('change', () => {
+    FireUI.toggleInflationFields(infToggle.checked);
     recalculate();
   });
 
@@ -71,5 +79,6 @@
   // Init
   FireUI.populateInflationTable();
   FireUI.toggleStatePensionFields(spToggle.checked);
+  FireUI.toggleInflationFields(infToggle.checked);
   recalculate();
 })();
