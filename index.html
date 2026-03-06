@@ -9,103 +9,93 @@
 <body>
   <header>
     <h1>🔥 FIRE Planner</h1>
-    <p class="subtitle">Financial Independence, Retire Early</p>
+    <p class="subtitle">When can you stop working? Let's find out.</p>
   </header>
 
   <main>
-    <!-- Age & FIRE Target -->
-    <section class="card" id="personal-section">
-      <h2>Your Target</h2>
+    <!-- Step 1: Age -->
+    <section class="card">
+      <h2>1. About You</h2>
       <div class="form-grid">
         <div class="field">
           <label for="currentAge">Current Age</label>
-          <input type="number" id="currentAge" value="30" min="18" max="80">
+          <div class="slider-row">
+            <input type="range" id="currentAge" min="18" max="70" value="30">
+            <input type="number" id="currentAgeNum" min="18" max="70" value="30" class="num-input">
+          </div>
         </div>
         <div class="field">
           <label for="targetAge">Target Retirement Age</label>
-          <input type="number" id="targetAge" value="50" min="25" max="80">
-        </div>
-        <div class="field">
-          <label for="fireTarget">FIRE Number — Your Target (£)</label>
-          <input type="number" id="fireTarget" value="750000" min="0" step="10000">
-        </div>
-      </div>
-    </section>
-
-    <!-- Savings Pots -->
-    <section class="card" id="pots-section">
-      <h2>Savings Pots</h2>
-
-      <div class="pot" id="pot-pension">
-        <h3>🏛️ Pension</h3>
-        <div class="form-grid">
-          <div class="field">
-            <label for="pensionBalance">Current Balance (£)</label>
-            <input type="number" id="pensionBalance" value="45000" min="0" step="1000">
-          </div>
-          <div class="field">
-            <label for="pensionContrib">Your Monthly Contribution (£)</label>
-            <input type="number" id="pensionContrib" value="500" min="0" step="50">
-          </div>
-          <div class="field">
-            <label for="employerContrib">Employer Monthly Contribution (£)</label>
-            <input type="number" id="employerContrib" value="250" min="0" step="50">
-          </div>
-          <div class="field">
-            <label for="pensionReturn">Expected Annual Return (%)</label>
-            <input type="number" id="pensionReturn" value="7" min="0" max="20" step="0.5">
-          </div>
-        </div>
-      </div>
-
-      <div class="pot" id="pot-isa">
-        <h3>🛡️ ISA</h3>
-        <div class="form-grid">
-          <div class="field">
-            <label for="isaBalance">Current Balance (£)</label>
-            <input type="number" id="isaBalance" value="20000" min="0" step="1000">
-          </div>
-          <div class="field">
-            <label for="isaContrib">Monthly Contribution (£)</label>
-            <input type="number" id="isaContrib" value="400" min="0" step="50">
-          </div>
-          <div class="field">
-            <label for="isaReturn">Expected Annual Return (%)</label>
-            <input type="number" id="isaReturn" value="6" min="0" max="20" step="0.5">
-          </div>
-        </div>
-      </div>
-
-      <div class="pot" id="pot-other">
-        <h3>💰 Other Savings</h3>
-        <div class="form-grid">
-          <div class="field">
-            <label for="otherBalance">Current Balance (£)</label>
-            <input type="number" id="otherBalance" value="10000" min="0" step="1000">
-          </div>
-          <div class="field">
-            <label for="otherContrib">Monthly Contribution (£)</label>
-            <input type="number" id="otherContrib" value="200" min="0" step="50">
-          </div>
-          <div class="field">
-            <label for="otherReturn">Expected Annual Return (%)</label>
-            <input type="number" id="otherReturn" value="4" min="0" max="20" step="0.5">
+          <div class="slider-row">
+            <input type="range" id="targetAge" min="25" max="80" value="55">
+            <input type="number" id="targetAgeNum" min="25" max="80" value="55" class="num-input">
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Life Events -->
-    <section class="card" id="events-section">
-      <h2>⚡ Life Events</h2>
+    <!-- Step 2: Savings Pots -->
+    <section class="card">
+      <h2>2. Your Savings</h2>
+
+      <div class="pot-category">
+        <div class="pot-category-header">
+          <h3>🏛️ Pensions</h3>
+          <button type="button" class="btn-add-pot" data-type="pension">+ Add Pension</button>
+        </div>
+        <div class="pot-list" id="pensionList"></div>
+      </div>
+
+      <div class="pot-category">
+        <div class="pot-category-header">
+          <h3>🛡️ ISAs</h3>
+          <button type="button" class="btn-add-pot" data-type="isa">+ Add ISA</button>
+        </div>
+        <div class="pot-list" id="isaList"></div>
+      </div>
+
+      <div class="pot-category">
+        <div class="pot-category-header">
+          <h3>💰 Other Savings</h3>
+          <button type="button" class="btn-add-pot" data-type="other">+ Add Other</button>
+        </div>
+        <div class="pot-list" id="otherList"></div>
+      </div>
+    </section>
+
+    <!-- Step 3: Life Events -->
+    <section class="card">
+      <h2>3. ⚡ Life Events</h2>
       <p class="section-desc">Model changes to your contributions — redundancy, career change, going part-time, etc.</p>
       <div id="eventsList"></div>
       <button type="button" class="btn-add" id="addEventBtn">+ Add Life Event</button>
     </section>
 
-    <!-- State Pension -->
-    <section class="card" id="adjustments-section">
-      <h2>State Pension</h2>
+    <!-- Step 4: Retirement Lifestyle -->
+    <section class="card">
+      <h2>4. 🏖️ Retirement Lifestyle</h2>
+      <p class="section-desc">How much do you want to live on each year once you stop working?</p>
+      <div class="form-grid">
+        <div class="field full-width">
+          <label>Annual Withdrawal (£)</label>
+          <div class="slider-row">
+            <input type="range" id="annualWithdrawal" min="5000" max="100000" step="1000" value="30000">
+            <input type="number" id="annualWithdrawalNum" min="0" max="200000" step="1000" value="30000" class="num-input">
+          </div>
+        </div>
+        <div class="field">
+          <label>Return During Retirement (%)</label>
+          <div class="slider-row">
+            <input type="range" id="drawdownReturn" min="0" max="10" step="0.5" value="4">
+            <input type="number" id="drawdownReturnNum" min="0" max="15" step="0.5" value="4" class="num-input">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 5: State Pension -->
+    <section class="card">
+      <h2>5. State Pension</h2>
       <div class="form-grid">
         <div class="field toggle-field">
           <label for="statePensionEnabled">Include State Pension</label>
@@ -115,32 +105,32 @@
           </label>
         </div>
         <div class="field" id="statePensionAgeField">
-          <label for="statePensionAge">State Pension Age</label>
-          <input type="number" id="statePensionAge" value="67" min="60" max="75">
+          <label>State Pension Age</label>
+          <div class="slider-row">
+            <input type="range" id="statePensionAge" min="60" max="75" value="67">
+            <input type="number" id="statePensionAgeNum" min="60" max="75" value="67" class="num-input">
+          </div>
         </div>
         <div class="field" id="statePensionAmountField">
-          <label for="statePensionAmount">Annual State Pension (£)</label>
-          <input type="number" id="statePensionAmount" value="11500" min="0" step="100">
+          <label>Annual State Pension (£)</label>
+          <div class="slider-row">
+            <input type="range" id="statePensionAmount" min="0" max="20000" step="100" value="11500">
+            <input type="number" id="statePensionAmountNum" min="0" max="30000" step="100" value="11500" class="num-input">
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Retirement Drawdown -->
-    <section class="card" id="drawdown-section">
-      <h2>🏖️ Retirement Drawdown</h2>
-      <p class="section-desc">Model what happens once you stop working and start drawing from your pot.</p>
+    <!-- Step 6: Inflation -->
+    <section class="card">
+      <h2>6. Inflation</h2>
       <div class="form-grid">
         <div class="field">
-          <label for="annualWithdrawal">Annual Withdrawal (£)</label>
-          <input type="number" id="annualWithdrawal" value="30000" min="0" step="1000">
-        </div>
-        <div class="field">
-          <label for="drawdownReturn">Return During Retirement (%)</label>
-          <input type="number" id="drawdownReturn" value="4" min="0" max="15" step="0.5">
-        </div>
-        <div class="field">
-          <label for="futureInflation">Assumed Inflation (%)</label>
-          <input type="number" id="futureInflation" value="2.5" min="0" max="15" step="0.1">
+          <label>Assumed Future Inflation (%)</label>
+          <div class="slider-row">
+            <input type="range" id="futureInflation" min="0" max="10" step="0.1" value="2.5">
+            <input type="number" id="futureInflationNum" min="0" max="15" step="0.1" value="2.5" class="num-input">
+          </div>
         </div>
       </div>
       <div class="inflation-history">
@@ -152,40 +142,21 @@
           </table>
         </div>
       </div>
-
-      <div class="drawdown-results" id="drawdownResults">
-        <div class="fire-summary">
-          <div class="metric">
-            <span class="metric-label">Pot at Retirement</span>
-            <span class="metric-value" id="drawdownStartPot">—</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Money Runs Out</span>
-            <span class="metric-value" id="runsOutAge">—</span>
-            <span class="metric-sub" id="runsOutNote"></span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Withdrawal (Today's £)</span>
-            <span class="metric-value" id="realWithdrawal">—</span>
-            <span class="metric-sub">After inflation at retirement</span>
-          </div>
-        </div>
-        <div class="chart-container">
-          <h3>Drawdown Projection</h3>
-          <canvas id="drawdownChart"></canvas>
-        </div>
-      </div>
     </section>
 
     <!-- Results Dashboard -->
     <section class="card results-card" id="results-section">
-      <h2>Your FIRE Dashboard</h2>
+      <h2>🔥 Your Results</h2>
+
+      <div class="headline-result">
+        <div class="headline" id="headlineText">Calculating...</div>
+      </div>
 
       <div class="fire-summary">
         <div class="metric">
-          <span class="metric-label">FIRE Target</span>
+          <span class="metric-label">FIRE Number</span>
           <span class="metric-value" id="fireNumber">—</span>
-          <span class="metric-sub">Your goal</span>
+          <span class="metric-sub">The pot you need</span>
         </div>
         <div class="metric">
           <span class="metric-label">Years to FIRE</span>
@@ -195,38 +166,33 @@
         <div class="metric">
           <span class="metric-label">Projected Total</span>
           <span class="metric-value" id="projectedTotal">—</span>
-          <span class="metric-sub">At target retirement age</span>
+          <span class="metric-sub">At retirement age (today's £)</span>
         </div>
         <div class="metric">
-          <span class="metric-label">Coast FIRE Age</span>
-          <span class="metric-value" id="coastFireAge">—</span>
-          <span class="metric-sub">Stop contributing, still retire at 60</span>
+          <span class="metric-label">Money Runs Out</span>
+          <span class="metric-value" id="runsOutAge">—</span>
+          <span class="metric-sub" id="runsOutNote"></span>
         </div>
       </div>
 
-      <div class="progress-section">
-        <div class="progress-label">
-          <span>Progress to FIRE</span>
-          <span id="progressPct">0%</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-      </div>
+      <!-- What-if insights -->
+      <div class="what-if" id="whatIf"></div>
 
-      <!-- Pot Breakdown -->
       <div class="pot-breakdown">
         <h3>Projected Pot Values at Retirement</h3>
         <div class="pot-bars" id="potBars"></div>
       </div>
 
-      <!-- Chart -->
       <div class="chart-container">
-        <h3>Wealth Projection</h3>
+        <h3>Wealth Growth</h3>
         <canvas id="fireChart"></canvas>
       </div>
 
-      <!-- Milestones -->
+      <div class="chart-container">
+        <h3>Retirement Drawdown</h3>
+        <canvas id="drawdownChart"></canvas>
+      </div>
+
       <div class="milestones" id="milestones">
         <h3>Milestones</h3>
         <div class="milestone-list" id="milestoneList"></div>
