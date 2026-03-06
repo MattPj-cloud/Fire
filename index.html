@@ -12,6 +12,10 @@
     <p class="subtitle">When can you stop working? Let's find out.</p>
   </header>
 
+  <div class="privacy-banner">
+    🔒 Your data stays on your device. Nothing is collected, stored, or sent anywhere — this tool runs 100% in your browser.
+  </div>
+
   <main>
     <!-- Step 1: Age -->
     <section class="card">
@@ -60,6 +64,14 @@
           <button type="button" class="btn-add-pot" data-type="other">+ Add Other</button>
         </div>
         <div class="pot-list" id="otherList"></div>
+      </div>
+
+      <div class="pot-category">
+        <div class="pot-category-header">
+          <h3>📋 DB Pensions (Defined Benefit)</h3>
+          <button type="button" class="btn-add-pot" data-type="db">+ Add DB Pension</button>
+        </div>
+        <div class="pot-list" id="dbList"></div>
       </div>
     </section>
 
@@ -125,7 +137,14 @@
     <section class="card">
       <h2>6. Inflation</h2>
       <div class="form-grid">
-        <div class="field">
+        <div class="field toggle-field">
+          <label for="inflationEnabled">Account for Inflation</label>
+          <label class="toggle">
+            <input type="checkbox" id="inflationEnabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="field" id="inflationRateField">
           <label>Assumed Future Inflation (%)</label>
           <div class="slider-row">
             <input type="range" id="futureInflation" min="0" max="10" step="0.1" value="2.5">
@@ -193,12 +212,115 @@
         <canvas id="drawdownChart"></canvas>
       </div>
 
+      <!-- Cashflow Timeline -->
+      <div class="chart-container" id="cashflowSection" style="display:none">
+        <h3>📊 Retirement Income Breakdown</h3>
+        <canvas id="cashflowChart"></canvas>
+        <details class="cashflow-details">
+          <summary>View Year-by-Year Cashflow Table</summary>
+          <div class="cashflow-table-wrap">
+            <table id="cashflowTable">
+              <thead>
+                <tr>
+                  <th>Age</th>
+                  <th>DB Income</th>
+                  <th>State Pension</th>
+                  <th>DC Withdrawal</th>
+                  <th>Total Income</th>
+                  <th>DC Pot Left</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+
+      <!-- Bridge Solver -->
+      <div class="card bridge-panel" id="bridgeSection" style="display:none">
+        <h3>🌉 Bridge Funding</h3>
+        <p class="section-desc">Extra DC savings needed to cover the gap before your DB and State pensions start.</p>
+        <div class="fire-summary">
+          <div class="metric">
+            <span class="metric-label">Bridge Years</span>
+            <span class="metric-value" id="bridgeYears">—</span>
+            <span class="metric-sub">Gap before pensions start</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Bridge Pot Needed</span>
+            <span class="metric-value" id="bridgePot">—</span>
+            <span class="metric-sub">At retirement (today's £)</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Monthly Contribution</span>
+            <span class="metric-value" id="bridgeMonthly">—</span>
+            <span class="metric-sub">Extra saving needed now</span>
+          </div>
+        </div>
+      </div>
+
       <div class="milestones" id="milestones">
         <h3>Milestones</h3>
         <div class="milestone-list" id="milestoneList"></div>
       </div>
     </section>
   </main>
+
+  <!-- Methodology & Assumptions -->
+  <section class="card" id="methodologySection">
+    <h2>📖 Methodology & Assumptions</h2>
+    <p class="section-desc">How the numbers are calculated and what we assume along the way.</p>
+
+    <details class="method-group" open>
+      <summary>FIRE Number</summary>
+      <p>Your FIRE number is calculated using the <strong>4% Safe Withdrawal Rate (SWR)</strong> rule, based on the Trinity Study. FIRE Number = Annual Withdrawal ÷ 0.04. This assumes a diversified portfolio can sustain 4% annual withdrawals (adjusted for inflation) over a 30+ year retirement with a high probability of not running out.</p>
+      <p>If you include a State Pension or DB pensions, the capital equivalent of that guaranteed income (annual amount ÷ 0.04) is subtracted from your FIRE number, since you need less from your own pot.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Compound Growth</summary>
+      <p>All savings pots grow using <strong>annual compound interest</strong>. Each year: new balance = (previous balance + annual contributions) × (1 + return rate). Contributions are assumed to be made evenly throughout the year and compounded at year-end. Returns are nominal (before inflation).</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Inflation Adjustment</summary>
+      <p>All "real" (today's money) values are calculated by dividing nominal values by (1 + inflation)^years. The default inflation rate is 2.5%, roughly in line with the Bank of England's long-term target. Historic UK CPI rates from 2000–2024 are provided for reference.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Retirement Drawdown</summary>
+      <p>From your target retirement age to age 100, the model withdraws your chosen annual amount (increasing each year with inflation) from your combined DC pot. The remaining pot continues to grow at your chosen drawdown return rate. State Pension and DB pension income reduce the amount drawn from your DC pot each year.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Defined Benefit (DB) Pensions</summary>
+      <p>DB pension income at retirement is calculated as: <strong>Current Accrued + (Salary × 1/Accrual Rate × Years Left to Work)</strong>. If you draw your DB pension before your Normal Pension Age (NPA), a reduction of your chosen rate (default 5%) is applied per year early, with a floor at 30% of the full value. This models the "double hit" of fewer accrual years plus early retirement reduction.</p>
+      <p>DB income only appears in the cashflow from the chosen pension start age onwards. Multiple DB pensions are summed independently.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Bridge Solver</summary>
+      <p>The bridge solver calculates how much extra DC savings you need to cover the income gap between your retirement age and when your DB/State pensions start. It sums the year-by-year DC shortfalls during the gap period, discounted back to retirement using your drawdown return rate (present value). It then calculates the monthly contribution needed during your working years to build that pot, using the future value of annuity formula.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>Coast FIRE</summary>
+      <p>Coast FIRE age is the age at which your existing savings, with no further contributions, would grow to your FIRE number by age 60 — assuming the average return across your pots. After this age, you only need to earn enough to cover current expenses.</p>
+    </details>
+
+    <details class="method-group">
+      <summary>What This Tool Does NOT Account For</summary>
+      <ul class="method-list">
+        <li>Tax — pension contributions are assumed pre-tax; no income tax, capital gains tax, or tax-free allowances are modelled</li>
+        <li>Fees — platform fees, fund charges, and adviser fees are not deducted</li>
+        <li>Salary growth — your salary and contributions are assumed constant unless changed via Life Events</li>
+        <li>Annuity purchase — the model assumes drawdown only, not annuity conversion</li>
+        <li>Sequence of returns risk — returns are assumed constant each year (no market volatility)</li>
+        <li>Lifetime Allowance / Annual Allowance — pension tax limits are not enforced</li>
+        <li>Inheritance or windfalls — one-off lump sums are not modelled</li>
+      </ul>
+    </details>
+  </section>
 
   <footer>
     <p>For illustration purposes only. Not financial advice. 🔥</p>
