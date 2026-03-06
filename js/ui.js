@@ -80,6 +80,18 @@ const FireUI = (() => {
         { label: 'Expected Return (%)', key: 'return', min: 0, max: 15, step: 0.5, val: 4, numMax: 20 },
       ],
     },
+    db: {
+      defaultName: 'DB Pension',
+      fields: [
+        { label: 'Current Accrued Annual Income (£)', key: 'accrued', min: 0, max: 50000, step: 100, val: 5000, numMax: 100000 },
+        { label: 'Current Salary (£)', key: 'salary', min: 0, max: 200000, step: 1000, val: 40000, numMax: 500000 },
+        { label: 'Accrual Rate (1/n)', key: 'accrualRate', min: 40, max: 80, step: 1, val: 57, numMax: 100 },
+        { label: 'Years Left to Work', key: 'yearsToWork', min: 0, max: 40, step: 1, val: 20, numMax: 50 },
+        { label: 'Normal Pension Age', key: 'npa', min: 55, max: 75, step: 1, val: 67, numMax: 75 },
+        { label: 'Chosen Pension Start Age', key: 'startAge', min: 55, max: 75, step: 1, val: 60, numMax: 75 },
+        { label: 'Reduction Rate (% per year)', key: 'reductionRate', min: 0, max: 10, step: 0.5, val: 5, numMax: 15 },
+      ],
+    },
   };
 
   function addPot(type, values) {
@@ -180,10 +192,12 @@ const FireUI = (() => {
       statePensionEnabled: document.getElementById('statePensionEnabled').checked,
       statePensionAge: val('statePensionAge'),
       statePensionAmount: val('statePensionAmount'),
-      inflation: val('futureInflation'),
+      inflation: document.getElementById('inflationEnabled').checked ? val('futureInflation') : 0,
       annualWithdrawal: val('annualWithdrawal'),
       drawdownReturn: val('drawdownReturn'),
       lifeEvents: readLifeEvents(),
+      // DB pensions
+      dbPensions: readPots('db'),
       // Pass individual pots for detailed breakdown
       _pensions: pensions,
       _isas: isas,
@@ -310,8 +324,13 @@ const FireUI = (() => {
     updateWhatIf(result);
     updatePotBars(result);
     updateMilestones(result);
+    renderCashflowTable(result.cashflow);
+    renderBridgeResult(result.bridge);
     FireChart.drawChart('fireChart', result);
     FireChart.drawDrawdownChart('drawdownChart', dd, result);
+    if (result.cashflow && result.cashflow.length > 0) {
+      FireChart.drawCashflowChart('cashflowChart', result.cashflow, result.drawdown.annualWithdrawal);
+    }
   }
 
   function updateWhatIf(result) {
@@ -354,16 +373,41 @@ const FireUI = (() => {
       { label: 'Other', value: result.other.real, cls: 'other' },
     ];
 
-    container.innerHTML = pots.map(p => {
+    let html = pots.map(p => {
       const pct = (p.value / maxBar) * 100;
       return `<div class="pot-bar-row">
           <span class="pot-bar-label">${p.label}</span>
           <div class="pot-bar-track"><div class="pot-bar-fill ${p.cls}" style="width:${pct}%">${fmt(p.value)}</div></div>
         </div>`;
-    }).join('') + `<div class="pot-bar-row" style="margin-top:0.3rem">
-        <span class="pot-bar-label" style="font-weight:600;color:#e2e8f0">Total</span>
+    }).join('');
+
+    html += `<div class="pot-bar-row" style="margin-top:0.3rem">
+        <span class="pot-bar-label" style="font-weight:600;color:#e2e8f0">Total DC</span>
         <span style="font-weight:700;color:#f59e0b;font-size:1.1rem">${fmt(total)}</span>
       </div>`;
+
+    // DB pension income summary
+    if (result.dbPensions && result.dbPensions.length > 0) {
+      let totalDBIncome = 0;
+      const dbLines = result.dbPensions.map(db => {
+        const income = FireEngine.calculateDBIncome(db);
+        totalDBIncome += income;
+        return `<div class="pot-bar-row">
+            <span class="pot-bar-label" style="color:#22c55e">${db.name || 'DB Pension'}</span>
+            <span style="color:#22c55e;font-size:0.9rem;font-weight:600">${fmt(income)}/yr</span>
+          </div>`;
+      });
+      html += `<div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--card-border)">
+        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.4rem">📋 Guaranteed DB Income (not a pot — paid as annual income)</div>
+        ${dbLines.join('')}
+        <div class="pot-bar-row" style="margin-top:0.3rem">
+          <span class="pot-bar-label" style="font-weight:600;color:#22c55e">Total DB</span>
+          <span style="font-weight:700;color:#22c55e;font-size:1.1rem">${fmt(totalDBIncome)}/yr</span>
+        </div>
+      </div>`;
+    }
+
+    container.innerHTML = html;
   }
 
   function updateMilestones(result) {
@@ -383,9 +427,49 @@ const FireUI = (() => {
     if (result.statePensionEnabled) milestones.push({ icon: '🏛️', text: `State pension kicks in at age <span>${result.statePensionAge}</span> (${fmt(result.statePensionAnnual)}/yr)` });
     if (result.lifeEvents) result.lifeEvents.forEach(ev => milestones.push({ icon: '⚡', text: `<span>${ev.name}</span> at age <span>${ev.atAge}</span>` }));
 
+    // DB pension milestones
+    if (result.dbPensions && result.dbPensions.length > 0) {
+      result.dbPensions.forEach(db => {
+        const income = FireEngine.calculateDBIncome(db);
+        milestones.push({ icon: '📋', text: `<span>${db.name || 'DB Pension'}</span> starts at age <span>${db.startAge}</span> (${fmt(income)}/yr)` });
+      });
+    }
+
     list.innerHTML = milestones.map(m =>
       `<div class="milestone-item"><span class="milestone-icon">${m.icon}</span><span class="milestone-text">${m.text}</span></div>`
     ).join('');
+  }
+
+  function renderCashflowTable(cashflow) {
+    const section = document.getElementById('cashflowSection');
+    const tbody = document.querySelector('#cashflowTable tbody');
+    if (!cashflow || cashflow.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    tbody.innerHTML = cashflow.map(row =>
+      `<tr>
+        <td>${row.age}</td>
+        <td>${fmt(row.dbIncome)}</td>
+        <td>${fmt(row.spIncome)}</td>
+        <td>${fmt(row.dcWithdrawal)}</td>
+        <td>${fmt(row.totalIncome)}</td>
+        <td>${fmt(row.dcPotRemaining)}</td>
+      </tr>`
+    ).join('');
+  }
+
+  function renderBridgeResult(bridge) {
+    const section = document.getElementById('bridgeSection');
+    if (!bridge || !bridge.required) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    document.getElementById('bridgeYears').textContent = bridge.bridgeYears;
+    document.getElementById('bridgePot').textContent = fmt(bridge.bridgePot);
+    document.getElementById('bridgeMonthly').textContent = fmt(bridge.monthlyContrib) + '/mo';
   }
 
   function populateInflationTable() {
@@ -403,8 +487,14 @@ const FireUI = (() => {
     amountField.querySelectorAll('input').forEach(i => i.disabled = !enabled);
   }
 
+  function toggleInflationFields(enabled) {
+    const rateField = document.getElementById('inflationRateField');
+    rateField.style.opacity = enabled ? '1' : '0.4';
+    rateField.querySelectorAll('input').forEach(i => i.disabled = !enabled);
+  }
+
   return {
-    readInputs, updateResults, populateInflationTable, toggleStatePensionFields,
+    readInputs, updateResults, populateInflationTable, toggleStatePensionFields, toggleInflationFields,
     addLifeEvent, getAddEventBtn, bindAllSliders, addPot,
   };
 })();
