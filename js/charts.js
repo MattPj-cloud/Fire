@@ -338,5 +338,136 @@ const FireChart = (() => {
     ctx.setLineDash([]);
   }
 
-  return { drawChart, drawDrawdownChart };
+  function drawCashflowChart(canvasId, cashflow, targetIncome) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !cashflow || cashflow.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const w = rect.width;
+    const h = rect.height;
+    const pad = { top: 25, right: 20, bottom: 35, left: 65 };
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+    const totalYears = cashflow.length - 1;
+
+    // Find max value for scale
+    let maxVal = 0;
+    for (const row of cashflow) {
+      if (row.totalIncome > maxVal) maxVal = row.totalIncome;
+    }
+    maxVal = Math.max(maxVal, targetIncome) * 1.15;
+
+    ctx.clearRect(0, 0, w, h);
+
+    function toX(i) { return pad.left + (i / totalYears) * plotW; }
+    function toY(val) { return pad.top + plotH - (val / maxVal) * plotH; }
+
+    // Grid
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    const gridCount = 5;
+    for (let i = 0; i <= gridCount; i++) {
+      const val = (maxVal / gridCount) * i;
+      const gy = toY(val);
+      ctx.beginPath();
+      ctx.moveTo(pad.left, gy);
+      ctx.lineTo(w - pad.right, gy);
+      ctx.stroke();
+      ctx.fillStyle = COLORS.label;
+      ctx.fillText('£' + formatK(val), pad.left - 8, gy + 4);
+    }
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    const step = totalYears <= 20 ? 5 : 10;
+    for (let i = 0; i <= totalYears; i += step) {
+      ctx.fillStyle = COLORS.label;
+      ctx.fillText('Age ' + cashflow[i].age, toX(i), h - 8);
+    }
+
+    // Stacked areas: DC (bottom), DB (middle), State Pension (top)
+    const layers = [
+      { key: 'dcWithdrawal', color: '#3b82f6' },
+      { key: 'dbIncome', color: '#22c55e' },
+      { key: 'spIncome', color: '#f59e0b' },
+    ];
+
+    // Build cumulative stacks
+    const stacks = cashflow.map(row => {
+      const dc = row.dcWithdrawal;
+      const db = row.dbIncome;
+      const sp = row.spIncome;
+      return [dc, dc + db, dc + db + sp];
+    });
+
+    // Draw from top to bottom so lower layers paint over
+    for (let l = layers.length - 1; l >= 0; l--) {
+      const topVals = stacks.map(s => s[l]);
+      const bottomVals = l > 0 ? stacks.map(s => s[l - 1]) : stacks.map(() => 0);
+
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(topVals[0]));
+      for (let i = 1; i < cashflow.length; i++) {
+        ctx.lineTo(toX(i), toY(topVals[i]));
+      }
+      for (let i = cashflow.length - 1; i >= 0; i--) {
+        ctx.lineTo(toX(i), toY(bottomVals[i]));
+      }
+      ctx.closePath();
+      ctx.fillStyle = layers[l].color + '55';
+      ctx.fill();
+
+      // Line on top
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(topVals[0]));
+      for (let i = 1; i < cashflow.length; i++) {
+        ctx.lineTo(toX(i), toY(topVals[i]));
+      }
+      ctx.strokeStyle = layers[l].color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Target income reference line
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, toY(targetIncome));
+    ctx.lineTo(w - pad.right, toY(targetIncome));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ef4444';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Target: £' + formatK(targetIncome) + '/yr', pad.left + 4, toY(targetIncome) - 6);
+
+    // Legend
+    const legendItems = [
+      { label: 'DC Pot', color: '#3b82f6' },
+      { label: 'DB Pension', color: '#22c55e' },
+      { label: 'State Pension', color: '#f59e0b' },
+    ];
+    ctx.font = '10px system-ui';
+    let lx = w - pad.right;
+    ctx.textAlign = 'right';
+    for (let i = legendItems.length - 1; i >= 0; i--) {
+      const item = legendItems[i];
+      const tw = ctx.measureText(item.label).width;
+      ctx.fillStyle = item.color;
+      ctx.fillRect(lx - tw - 14, pad.top - 2, 10, 10);
+      ctx.fillStyle = COLORS.label;
+      ctx.fillText(item.label, lx, pad.top + 7);
+      lx -= tw + 24;
+    }
+  }
+
+  return { drawChart, drawDrawdownChart, drawCashflowChart };
 })();
