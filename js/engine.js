@@ -132,6 +132,18 @@ const FireEngine = (() => {
       adjustedFireNumber = Math.max(0, fireNumber - statePensionCapital);
     }
 
+    // DB pension adjustment: reduce FIRE number by capital equivalent of DB income
+    const dbPensions = Array.isArray(inputs.dbPensions) ? inputs.dbPensions : [];
+    let totalDBIncome = 0;
+    for (const db of dbPensions) {
+      if (db.startAge <= inputs.targetAge) {
+        totalDBIncome += calculateDBIncome(db);
+      }
+    }
+    if (totalDBIncome > 0) {
+      adjustedFireNumber = Math.max(0, adjustedFireNumber - totalDBIncome / 0.04);
+    }
+
     // Recalculate FIRE year with state pension adjustment
     let adjustedFireYear = fireYear;
     if (inputs.statePensionEnabled) {
@@ -152,6 +164,11 @@ const FireEngine = (() => {
     // What-if scenarios
     const whatIf = calculateWhatIfs(inputs, combined, fireNumber);
 
+    // Cashflow timeline and bridge solver
+    const lastYear = combined[combined.length - 1];
+    const cashflow = buildCashflow(inputs, lastYear.totalNominal);
+    const bridge = solveBridge(inputs, cashflow);
+
     return {
       years,
       combined,
@@ -171,6 +188,9 @@ const FireEngine = (() => {
       drawdown,
       whatIf,
       lifeEvents: sorted.map(e => ({ name: e.name || 'Event', atAge: e.atAge })),
+      cashflow,
+      bridge,
+      dbPensions,
     };
   }
 
@@ -231,6 +251,7 @@ const FireEngine = (() => {
     const ret = inputs.drawdownReturn / 100;
     const maxAge = 100;
     const maxYears = maxAge - retireAge;
+    const dbPensions = Array.isArray(inputs.dbPensions) ? inputs.dbPensions : [];
 
     let pot = startingPot;
     let withdrawal = inputs.annualWithdrawal;
@@ -243,11 +264,20 @@ const FireEngine = (() => {
       data.push({ year: y, age, nominal: pot, real: realPot, withdrawal });
 
       if (y < maxYears) {
-        let effectiveWithdrawal = withdrawal;
-        if (inputs.statePensionEnabled && age >= inputs.statePensionAge) {
-          const inflatedStatePension = inputs.statePensionAmount * Math.pow(1 + inf, age - retireAge);
-          effectiveWithdrawal = Math.max(0, withdrawal - inflatedStatePension);
+        // Sum active DB pension income at this age
+        let dbIncome = 0;
+        for (const db of dbPensions) {
+          if (age >= db.startAge) {
+            dbIncome += calculateDBIncome(db);
+          }
         }
+
+        let effectiveWithdrawal = withdrawal;
+        let inflatedStatePension = 0;
+        if (inputs.statePensionEnabled && age >= inputs.statePensionAge) {
+          inflatedStatePension = inputs.statePensionAmount * Math.pow(1 + inf, age - retireAge);
+        }
+        effectiveWithdrawal = Math.max(0, withdrawal - dbIncome - inflatedStatePension);
 
         pot = (pot - effectiveWithdrawal) * (1 + ret);
 
@@ -270,5 +300,127 @@ const FireEngine = (() => {
     };
   }
 
-  return { runProjection, getInflationHistory };
+  /**
+   * Calculate annual income from a Defined Benefit pension.
+   * Handles the "double hit": fewer accrual years + early retirement reduction.
+   * @param {Object} db - DB pension object
+   * @returns {number} Annual DB pension income
+   */
+  function calculateDBIncome(db) {
+    const accrualFraction = db.accrualRate === 0 ? 0 : 1 / db.accrualRate;
+    const totalAccrued = db.accrued + (db.salary * accrualFraction * db.yearsToWork);
+    if (db.startAge >= db.npa) return totalAccrued;
+    const yearsEarly = db.npa - db.startAge;
+    const multiplier = Math.max(0.3, 1 - (yearsEarly * db.reductionRate / 100));
+    return totalAccrued * multiplier;
+  }
+
+  /**
+   * Build a year-by-year cashflow timeline from retirement age to 100.
+   * @param {Object} inputs - Full inputs object with targetAge, annualWithdrawal, inflation, drawdownReturn, dbPensions, statePension fields
+   * @param {number} dcStartPot - DC pot value at retirement
+   * @returns {Array} Array of cashflow row objects
+   */
+  function buildCashflow(inputs, dcStartPot) {
+    const rows = [];
+    const retireAge = inputs.targetAge;
+    const inf = inputs.inflation / 100;
+    const drawdownReturn = inputs.drawdownReturn / 100;
+    const dbPensions = Array.isArray(inputs.dbPensions) ? inputs.dbPensions : [];
+    let dcPot = dcStartPot || 0;
+
+    for (let age = retireAge; age <= 100; age++) {
+      const year = age - retireAge;
+
+      // Sum DB income from all DB pensions active at this age
+      let dbIncome = 0;
+      for (const db of dbPensions) {
+        if (age >= db.startAge) {
+          dbIncome += calculateDBIncome(db);
+        }
+      }
+
+      // State pension
+      const spIncome = (inputs.statePensionEnabled && age >= inputs.statePensionAge)
+        ? inputs.statePensionAmount : 0;
+
+      // Inflate target income from retirement
+      const targetIncome = inputs.annualWithdrawal * Math.pow(1 + inf, year);
+
+      // DC gap: shortfall between target and guaranteed income
+      const dcGap = Math.max(0, targetIncome - dbIncome - spIncome);
+      const dcWithdrawal = Math.min(dcGap, Math.max(0, dcPot));
+
+      // Withdraw then apply growth
+      dcPot = (Math.max(0, dcPot - dcWithdrawal)) * (1 + drawdownReturn);
+
+      const totalIncome = dbIncome + spIncome + dcWithdrawal;
+
+      rows.push({ age, dbIncome, spIncome, dcWithdrawal, totalIncome, dcPotRemaining: dcPot });
+    }
+    return rows;
+  }
+
+  /**
+   * Calculate the monthly contribution needed to accumulate a target amount.
+   * Uses the future value of annuity formula.
+   * @param {number} target - Target amount to accumulate
+   * @param {number} annualReturn - Annual return rate (e.g. 0.07 for 7%)
+   * @param {number} years - Number of years to contribute
+   * @returns {number} Required monthly contribution
+   */
+  function calculateMonthlyContrib(target, annualReturn, years) {
+    if (years <= 0) return target; // need it all now as a lump sum
+    const r = annualReturn / 12;
+    if (r === 0) return target / (years * 12);
+    const n = years * 12;
+    return target * r / (Math.pow(1 + r, n) - 1);
+  }
+
+  /**
+   * Solve the bridge funding gap between retirement and when DB/State pensions start.
+   * @param {Object} inputs - Full inputs object
+   * @param {Array} cashflow - Cashflow rows from buildCashflow
+   * @returns {Object} { required, bridgePot, monthlyContrib, bridgeYears }
+   */
+  function solveBridge(inputs, cashflow) {
+    const retireAge = inputs.targetAge;
+    const dbPensions = Array.isArray(inputs.dbPensions) ? inputs.dbPensions : [];
+
+    // Find the latest pension start age (max of all DB startAges and statePensionAge if enabled)
+    const pensionStartAges = dbPensions.map(db => db.startAge);
+    if (inputs.statePensionEnabled) {
+      pensionStartAges.push(inputs.statePensionAge);
+    }
+
+    // If no pensions at all, no bridge needed
+    if (pensionStartAges.length === 0) {
+      return { required: false, bridgePot: 0, monthlyContrib: 0, bridgeYears: 0 };
+    }
+
+    const lastGapAge = Math.max(...pensionStartAges);
+    const bridgeYears = Math.max(0, lastGapAge - retireAge);
+
+    if (bridgeYears === 0) {
+      return { required: false, bridgePot: 0, monthlyContrib: 0, bridgeYears: 0 };
+    }
+
+    // Sum the DC gaps during bridge years, discounted back to retirement
+    const drawdownReturn = inputs.drawdownReturn / 100;
+    let bridgePot = 0;
+    for (const row of cashflow) {
+      if (row.age >= lastGapAge) break;
+      const yearsFromRetirement = row.age - retireAge;
+      bridgePot += row.dcWithdrawal / Math.pow(1 + drawdownReturn, yearsFromRetirement);
+    }
+
+    // Monthly contribution needed during working years
+    const workingYears = inputs.targetAge - inputs.currentAge;
+    const avgReturn = inputs.pensionReturn / 100;
+    const monthlyContrib = calculateMonthlyContrib(bridgePot, avgReturn, workingYears);
+
+    return { required: true, bridgePot, monthlyContrib, bridgeYears };
+  }
+
+  return { runProjection, getInflationHistory, calculateDBIncome, buildCashflow, solveBridge };
 })();
