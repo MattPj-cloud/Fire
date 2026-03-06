@@ -257,6 +257,58 @@ select option { background: var(--card); color: var(--text); }
 
 footer { text-align: center; padding: 2rem 0 1rem; color: var(--text-muted); font-size: 0.8rem; }
 
+/* Cashflow chart */
+#cashflowChart { width: 100%; height: 300px; display: block; }
+
+/* Cashflow table */
+.cashflow-details { margin-top: 1rem; }
+.cashflow-details summary {
+  cursor: pointer; color: var(--accent); font-size: 0.85rem; padding: 0.5rem 0;
+  user-select: none;
+}
+.cashflow-details summary:hover { text-decoration: underline; }
+.cashflow-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+#cashflowTable { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+#cashflowTable th {
+  text-align: right; color: var(--accent); padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--card-border); position: sticky; top: 0;
+  background: var(--card); font-weight: 600;
+}
+#cashflowTable th:first-child { text-align: left; }
+#cashflowTable td {
+  padding: 0.35rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-muted); text-align: right;
+}
+#cashflowTable td:first-child { text-align: left; color: var(--text); }
+#cashflowTable tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+#cashflowTable tbody tr:hover { background: rgba(255,255,255,0.05); }
+
+/* Bridge panel */
+.bridge-panel { border-color: rgba(59,130,246,0.3); }
+
+/* Privacy banner */
+.privacy-banner {
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25);
+  border-radius: var(--radius); padding: 0.7rem 1.2rem; margin-bottom: 1.5rem;
+  font-size: 0.85rem; color: var(--green); text-align: center;
+}
+
+/* Methodology section */
+.method-group { margin-bottom: 0.6rem; }
+.method-group summary {
+  cursor: pointer; font-weight: 600; font-size: 0.95rem; color: var(--text);
+  padding: 0.6rem 0; user-select: none;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.method-group summary:hover { color: var(--accent); }
+.method-group p, .method-group ul {
+  font-size: 0.85rem; color: var(--text-muted); line-height: 1.7;
+  padding: 0.5rem 0 0.3rem 0.5rem;
+}
+.method-group strong { color: var(--text); font-weight: 600; }
+.method-list { padding-left: 1.5rem; }
+.method-list li { margin-bottom: 0.3rem; }
+
 @media (max-width: 600px) {
   body { padding: 1rem; }
   .form-grid { grid-template-columns: 1fr; }
